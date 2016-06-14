@@ -72,4 +72,3 @@ SUBSYS(net_prio)
 #endif
 
 /* */
-
