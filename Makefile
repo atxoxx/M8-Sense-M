@@ -260,7 +260,9 @@ GEN_OPT_FLAGS := $(call cc-option,-march=armv7-a-neon) \
  -fmodulo-sched \
  -fmodulo-sched-allow-regmoves \
  -fivopts
- 
+
+HOSTCC       = gcc
+HOSTCXX      = g++
 HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 -fomit-frame-pointer -fno-gcse \
                -floop-strip-mine -floop-block -pipe -std=gnu89 -Wno-unused-parameter -Wno-sign-compare \
                -Wno-missing-field-initializers -Wno-unused-variable -Wno-unused-value $(GEN_OPT_FLAGS) $(GRAPHITE) $(EXTRA_OPTS)
@@ -395,9 +397,9 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-                   -mtune=cortex-a15 -mfpu=neon-vfpv4 \
-                   -fmodulo-sched -fmodulo-sched-allow-regmoves -fno-tree-vectorize \
-                   -funswitch-loops -fpredictive-commoning \
+           -mtune=cortex-a15 -mfpu=neon-vfpv4 \
+           -fmodulo-sched -fmodulo-sched-allow-regmoves -fno-tree-vectorize \
+           -funswitch-loops -fpredictive-commoning \
 		   -fno-aggressive-loop-optimizations \
 		   -fno-delete-null-pointer-checks \
 		   -std=gnu89 -fno-pic $(GEN_OPT_FLAGS)
@@ -628,8 +630,8 @@ endif
 endif
 
 ifdef CONFIG_DEBUG_INFO
-KBUILD_CFLAGS	+= -g
-KBUILD_AFLAGS	+= -gdwarf-2
+KBUILD_CFLAGS	+= -g0
+KBUILD_AFLAGS	+= -g0
 endif
 
 ifdef CONFIG_DEBUG_INFO_REDUCED
