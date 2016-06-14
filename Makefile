@@ -245,10 +245,26 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 	  else if [ -x /bin/bash ]; then echo /bin/bash; \
 	  else echo sh; fi ; fi)
 
-HOSTCC       = gcc
-HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
-HOSTCXXFLAGS = -O2
+#Set Extra Compile Flags for Optimization
+GRAPHITE	= -fgraphite -fgraphite-identity -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -floop-flatten
+EXTRA_OPTS	= -fmodulo-sched -fmodulo-sched-allow-regmoves -ftree-loop-vectorize -floop-nest-optimize -ftree-loop-distribute-patterns -ftree-slp-vectorize -fvect-cost-model -ftree-partial-pre -fno-gcse \
+                  -fsched-spec-load -fsingle-precision-constant -fpredictive-commoning
+
+# fall back to -march=armv8-a in case the compiler isn't compatible
+# with -mcpu and -mtune
+ARM_ARCH_OPT := -mcpu=cortex-a15 -mtune=cortex-a15
+GEN_OPT_FLAGS := $(call cc-option,-march=armv7-a-neon) \
+ -g0 \
+ -DNDEBUG -pipe \
+ -fomit-frame-pointer \
+ -fmodulo-sched \
+ -fmodulo-sched-allow-regmoves \
+ -fivopts
+ 
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 -fomit-frame-pointer -fno-gcse \
+               -floop-strip-mine -floop-block -pipe -std=gnu89 -Wno-unused-parameter -Wno-sign-compare \
+               -Wno-missing-field-initializers -Wno-unused-variable -Wno-unused-value $(GEN_OPT_FLAGS) $(GRAPHITE) $(EXTRA_OPTS)
+HOSTCXXFLAGS = -O3 $(GEN_OPT_FLAGS) $(ARM_ARCH_OPT) $(GRAPHITE) $(EXTRA_OPTS) -mfpu=neon-vfpv4
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -349,15 +365,20 @@ CHECK		= sparse
 
 # Use the wrapper for the compiler.  This wrapper scans for new
 # warnings and causes the build to stop upon encountering them.
-CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
+#CC		= $(srctree)/scripts/gcc-wrapper.py $(REAL_CC)
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   =
-AFLAGS_MODULE   =
-LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
-AFLAGS_KERNEL	=
+CFLAGS_MODULE   = -DMODULE $(CFLAGS_KERNEL) 
+AFLAGS_MODULE   = -DMODULE $(CFLAGS_KERNEL) 
+LDFLAGS_MODULE  = --strip-debug
+CFLAGS_KERNEL	= -DNDEBUG -fmodulo-sched -fmodulo-sched-allow-regmoves -ftree-loop-vectorize \
+                  -fgraphite-identity -fivopts -ftree-vectorize -fvariable-expansion-in-unroller \
+                  -ftree-loop-distribution -ftree-loop-im -ftree-loop-ivcanon -floop-nest-optimize \
+                  -ftree-loop-distribute-patterns -ftree-slp-vectorize -fvect-cost-model -ftree-partial-pre \
+                  -fno-prefetch-loop-arrays -fno-gcse -fsched-spec-load -fsingle-precision-constant \
+                  -fpredictive-commoning -std=gnu89 $(GEN_OPT_FLAGS) $(GRAPHITE) $(EXTRA_OPTS) -mfpu=neon-vfpv4
+AFLAGS_KERNEL	= $(CFLAGS_KERNEL)
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -374,12 +395,18 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks
-KBUILD_AFLAGS_KERNEL :=
-KBUILD_CFLAGS_KERNEL :=
+                   -mtune=cortex-a15 -mfpu=neon-vfpv4 \
+                   -fmodulo-sched -fmodulo-sched-allow-regmoves -fno-tree-vectorize \
+                   -funswitch-loops -fpredictive-commoning \
+		   -fno-aggressive-loop-optimizations \
+		   -fno-delete-null-pointer-checks \
+		   -std=gnu89 -fno-pic $(GEN_OPT_FLAGS)
+
+KBUILD_AFLAGS_KERNEL := $(GEN_OPT_FLAGS)
+KBUILD_CFLAGS_KERNEL := $(GEN_OPT_FLAGS)
 KBUILD_AFLAGS   := -D__ASSEMBLY__
-KBUILD_AFLAGS_MODULE  := -DMODULE
-KBUILD_CFLAGS_MODULE  := -DMODULE
+KBUILD_AFLAGS_MODULE  := -DMODULE $(GEN_OPT_FLAGS)
+KBUILD_CFLAGS_MODULE  := -DMODULE $(GEN_OPT_FLAGS)
 KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
@@ -565,9 +592,11 @@ endif # $(dot-config)
 all: vmlinux
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
-KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -O2 $(call cc-disable-warning,maybe-uninitialized,)
 else
-KBUILD_CFLAGS	+= -O2
+KBUILD_CFLAGS	+= -O3 -Wno-maybe-uninitialized $(CFLAGS_KERNEL)
+KBUILD_CFLAGS += $(call cc-disable-warning,maybe-uninitialized)
+KBUILD_CFLAGS += $(call cc-disable-warning,array-bounds)
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
